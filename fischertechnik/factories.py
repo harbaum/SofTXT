@@ -1,0 +1,189 @@
+#
+# factories.py - ftDuino interface and factory API 
+#
+
+import threading, time
+
+import serial, json, select
+import serial.tools.list_ports
+
+FTDUINO_VIDPID = "1c40:0538"
+POLL_DELAY = .1  # poll inputs every 100ms for "Starte jedes mal" blocks
+
+# this in fact does not implement a TXT but an ftDuino ...
+class txt():
+    def __init__(self):
+        # search for ftDuino on USB
+        ports = []
+        self.lock = threading.Lock()
+            
+        for p in serial.tools.list_ports.grep("vid:pid="+FTDUINO_VIDPID):
+                ports.append(p.device)
+
+        self.ftduino = None
+        self.input_values = { }
+    
+        if len(ports) == 0:
+            print("No ftDuino found");
+            self.ftduino = None
+            return
+        
+        # try to connect ...
+        try:
+            # The Serial object that the printer is communicating on.
+            self.ftduino = serial.Serial(ports[0], 19200, timeout=3)
+        except serial.serialutil.SerialException:
+            print("Error connecting to ftDuino");
+
+    def set_o_value(self, port, val):
+        val = (val * 255)//512        
+        cmd = { "set": { "port": "o"+str(port), "value": val, "mode": "high" } }
+        self.lock.acquire()
+        self.send(json.dumps(cmd))
+        self.lock.release()
+
+    def set_i_mode(self, port, mode):
+        cmd = { "set": { "port": "i"+str(port), "mode": mode } }
+        if "i"+str(port) in self.input_values:
+            self.input_values.pop("i"+str(port))  # clear any old value
+        self.lock.acquire()
+        self.send(json.dumps(cmd))        
+        self.lock.release()
+
+    def poll(self, port):
+        if not self.ftduino: return None
+            
+        # read all available bytes from ftduino
+        r = [ 1 ]
+        msg = ""
+        while len(r):            
+            r, w, e = select.select([self.ftduino], [], [self.ftduino], 1)
+            if not self.ftduino in r:
+                print("Decoding timeout");
+                return None
+                
+            # append character
+            msg += self.ftduino.read().decode()
+            
+            # check for a full decodable message
+            try:
+                msg = json.loads(msg)
+                if "port" in msg and "value" in msg and msg["port"].lower() == port:
+                    return msg["value"]
+                else:
+                    None  # decodable but not hte info we were hoping for
+            except:
+                pass
+                
+        return None
+        
+    def get_i_value(self, port):
+        port = "i"+str(port)        
+        cmd = { "get": { "port": port } }
+        self.lock.acquire()
+        self.send(json.dumps(cmd))
+        val = self.poll(port);
+        self.lock.release()
+        return val
+        
+    def send(self, cmd):
+        if self.ftduino:
+            self.ftduino.write(cmd.encode())
+
+####################### CONTROLLER FACTORY ####################
+def init_controller_factory():
+    pass
+
+class controller_factory():
+    def create_graphical_controller():
+        return txt()
+
+####################### OUTPUT FACTORY ####################
+def init_output_factory():
+    pass
+
+class output():
+    def __init__(self, controller, port):
+        self.controller = controller
+        self.port = port
+
+    def set(self, val):
+        self.controller.set_o_value(self.port, val);
+        
+class led(output):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+
+    def set_brightness(self, val):
+        self.set(val)
+    
+class output_factory():
+    def create_led(controller, port):
+        return led(controller, port)
+
+####################### INPUT FACTORY ####################
+def init_input_factory():
+    pass
+
+class input():
+    thread = None  # single global thread for all inputs
+    handler = [ ]
+    
+    def __init__(self, controller, port):
+        self.controller = controller
+        self.port = port
+
+    def get_value(self):
+        return self.controller.get_i_value(self.port)
+    
+    def input_monitor(self):
+        while True:
+            # poll inputs
+            for h in input.handler:
+                value = self.controller.get_i_value(h["obj"].port)
+                if value != None and value != h["value"]:
+                    h["value"] = value
+                    h["handler"](value)
+                    
+            time.sleep(POLL_DELAY)
+        
+    def add_change_listener(self, ref, callback):
+        # create background task if we don't have one yet
+        if not input.thread:
+            input.thread = threading.Thread(target=self.input_monitor, daemon=True)
+            input.thread.start()
+
+        # store listener in handler list
+        input.handler.append( { "obj": self, "ref": ref, "handler": callback,
+                                "value": self.controller.get_i_value(self.port) } )
+            
+class push_button(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        controller.set_i_mode(port, "switch")
+
+    def get_state(self):
+        return self.get_value()
+
+    def is_open(self):
+        return self.get_value() == True
+
+    def is_closed(self):
+        return self.get_value() == False
+        
+class photoresistor(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        controller.set_i_mode(port, "resistance")
+
+    def get_resistance(self):
+        return int(self.get_value())
+        
+class input_factory():
+    def create_push_button(controller, port):
+        return push_button(controller, port)
+
+    def create_photoresistor(controller, port):
+        return photoresistor(controller, port)
+
+# todo: run a background process that talks to the ftduino

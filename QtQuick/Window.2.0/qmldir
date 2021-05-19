@@ -1,0 +1,8 @@
+module QtQuick.Window 
+TXTWindow 2.0 TXTWindow.qml
+TXTButton 2.0 TXTButton.qml
+TXTLabel 2.0 TXTLabel.qml
+TXTSlider 2.0 TXTSlider.qml
+TXTSwitch 2.0 TXTSwitch.qml
+TXTCheckBox 2.0 TXTCheckBox.qml
+TXTInput 2.0 TXTInput.qml
