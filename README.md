@@ -22,3 +22,19 @@ programs.
 in order to access the SoftXT on from within a browser running on the
 same PC simply enter ```localhost:8000``` as the IP address into the
 "Controller verbinden" dialog of ROBO Pro Coding.
+
+## Troubleshooting
+
+fischertechnik is using [Mixed Content](https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content)
+here which may cause the SoftXT setup to fail on the latest browsers.
+
+In the brwosers javascript console you'll then find a message like
+
+```
+Blocked loading mixed active content “http://192.168.7.2/api/v1/ping”
+```
+
+This will also prevent a real TXT-4.0. Once solution is to run the
+SoftXT and the browser accessing it on the same machine. Another
+solution is to create a local copy of ROBO Pro Coding and serve it
+locally via http (instead of https).
