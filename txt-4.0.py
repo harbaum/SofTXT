@@ -159,9 +159,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 if len(parts) > 1:
                     if parts[0] == "send-command":
                         print(bcolors.OKCYAN + "VoiceCommand: \"{}\"".format(unquote(parts[1])) + bcolors.ENDC)
-
-                        # the reply should likely contain infos about the running app
-                        # reply["xyz"] = abc
+                        # the reply should contain infos about the running app
+                        reply["application"] = "application name"
                         parts = parts[2:]
                     else:
                         print(bcolors.FAIL + "unexpected remote command: " + parts[0] + bcolors.ENDC)
