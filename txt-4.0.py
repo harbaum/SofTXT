@@ -27,6 +27,7 @@ from pathlib import Path
 import os
 import subprocess, pty, threading, select, queue
 from functools import partial
+from urllib.parse import unquote
 
 BASE = os.path.dirname(os.path.realpath(__file__))
 WORKSPACES = os.path.join(BASE, "workspaces")
@@ -153,11 +154,23 @@ class MyHandler(BaseHTTPRequestHandler):
                 if len(parts):
                     reply["cmd"] = parts[0]
                     parts = parts[1:]
+                    
+            elif target == "remote":
+                if len(parts) > 1:
+                    if parts[0] == "send-command":
+                        print(bcolors.OKCYAN + "VoiceCommand: \"{}\"".format(unquote(parts[1])) + bcolors.ENDC)
+
+                        # the reply should likely contain infos about the running app
+                        # reply["xyz"] = abc
+                        parts = parts[2:]
+                    else:
+                        print(bcolors.FAIL + "unexpected remote command: " + parts[0] + bcolors.ENDC)
+                        
             else:
                 print(bcolors.FAIL + "unexpected target: " + target + bcolors.ENDC)
 
             if len(parts):
-                print(bcolors.FAIL + "unexpected parts remaining: " + parts + bcolors.ENDC)
+                print(bcolors.FAIL + "unexpected parts remaining: " + str(parts) + bcolors.ENDC)
                 
         print(bcolors.HEADER + "reply:" + str(reply) + bcolors.ENDC)
         return reply
