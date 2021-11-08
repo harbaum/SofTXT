@@ -14,10 +14,15 @@
 #   - LED outputs
 # - Execution of main python code
 
+# TODO:
+# - use semaphore instead of queue
+#
+#
+
 from PyQt5.QtQml import QQmlApplicationEngine
 from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
-import sys, os, time
+import sys, os, time, queue
 import json
 
 # fischertechnik seems to have placed their own custom
@@ -46,7 +51,7 @@ class AppRunnerThread(QThread):
         self.finished.emit()
         
 class RunApplication(QApplication):
-    doExecScript = pyqtSignal(str)
+    doExecScript = pyqtSignal(str, bool)
 
     # handle user triggered gui events (e.g. "Wenn Schieberegler bewegt)"
     def handler(self, eid, parm):
@@ -71,7 +76,7 @@ class RunApplication(QApplication):
             
     def install_handler(self, id, event, handler):
         # set object name, so it's addressable from the python side
-        self.doExecScript.emit(id+".objectName = \""+id+"\"");
+        self.doExecScript.emit(id+".objectName = \""+id+"\"", False);
         # it may take some time for this to show effect
         obj = None
         while not obj: obj = self.engine.rootObjects()[0].findChild(QObject, id)
@@ -80,7 +85,26 @@ class RunApplication(QApplication):
         obj.onEvent.connect(self.handler)        
         
     def execScript(self, code):
-        self.doExecScript.emit(code)
+        self.doExecScript.emit(code, False)
+
+    # this is also new
+    def set_attr(self, item, value):
+        # RP-C converts everything to a string. How do we know if it's
+        # actually a string?        
+        if value == "true" or value == "false":
+            self.doExecScript.emit(item + "= "+str(value)+"", False);
+        else:
+            self.doExecScript.emit(item + "= \""+value+"\"", False);
+
+    def get_attr(self, item):
+        # simply invoke attribute name. This will return its value
+        self.doExecScript.emit(item, True);
+
+        # wait for result
+        while self.queue.empty(): pass
+
+        # return result
+        return self.queue.get()
         
     def openProject(self):
         # try to open project file
@@ -101,6 +125,9 @@ class RunApplication(QApplication):
         # run background thread for main program itself
         self.thread = AppRunnerThread(self.path + self.project["name"]+".py")
         self.thread.start()
+
+    def execResult(self, str):
+        self.queue.put(str)            
         
     def runDisplay(self):
         qml = os.path.join(self.path, "lib/display.qml")
@@ -112,9 +139,11 @@ class RunApplication(QApplication):
         self.engine.addImportPath(os.path.dirname(os.path.realpath(__file__)))
         self.engine.load(qml)
 
-        win = self.engine.rootObjects()[0]
+        win = self.engine.rootObjects()[0]        
         self.doExecScript.connect(win.execScript)
-        
+        win.execResultStr.connect(self.execResult)
+        win.execResultBool.connect(self.execResult)
+
         # check if something was loaded
         return bool(self.engine.rootObjects())
     
@@ -122,7 +151,10 @@ class RunApplication(QApplication):
         QApplication.__init__(self, args)
 
         self.handlers = { }
-        
+
+        # queue to pass attribute results from the gui into the app
+        self.queue = queue.Queue()
+
         # register self with gui connector
         ftgui.fttxt2_gui_connector.app = self
         
@@ -133,5 +165,10 @@ class RunApplication(QApplication):
         self.exec_()
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Please provide a project name");
+        sys.exit(-1)
+    
     RunApplication(sys.argv)
+    sys.exit(0)
 

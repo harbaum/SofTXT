@@ -7,12 +7,19 @@ import threading, time
 import serial, json, select
 import serial.tools.list_ports
 
+from fischertechnik.controller.Motor import Motor
+
 FTDUINO_VIDPID = "1c40:0538"
 POLL_DELAY = .1  # poll inputs every 100ms for "Starte jedes mal" blocks
 
 # this in fact does not implement a TXT but an ftDuino ...
-class txt():
-    def __init__(self):
+class ftduino():
+    def __init__(self, ext = None):
+        if ext != None:
+            # later we might search for multiple ftDuino's
+            print("WARNING: Ignoring request for extension controller")
+            return
+        
         # search for ftDuino on USB
         ports = []
         self.lock = threading.Lock()
@@ -35,9 +42,19 @@ class txt():
         except serial.serialutil.SerialException:
             print("Error connecting to ftDuino");
 
+    def get_loudspeaker(self):
+        return loudspeaker()
+            
     def set_o_value(self, port, val):
         val = (val * 255)//512        
         cmd = { "set": { "port": "o"+str(port), "value": val, "mode": "high" } }
+        self.lock.acquire()
+        self.send(json.dumps(cmd))
+        self.lock.release()
+
+    def set_m_value(self, port, val, dir):
+        val = (val * 255)//512        
+        cmd = { "set": { "port": "m"+str(port), "value": val, "mode": "right" if dir ==  Motor.CW else "left" } }
         self.lock.acquire()
         self.send(json.dumps(cmd))
         self.lock.release()
@@ -71,7 +88,7 @@ class txt():
                 if "port" in msg and "value" in msg and msg["port"].lower() == port:
                     return msg["value"]
                 else:
-                    None  # decodable but not hte info we were hoping for
+                    None  # decodable but not the info we were hoping for
             except:
                 pass
                 
@@ -95,9 +112,20 @@ def init_controller_factory():
     pass
 
 class controller_factory():
-    def create_graphical_controller():
-        return txt()
+    def create_graphical_controller(ext = None):
+        return ftduino(ext)
 
+####################### LOUDSPEAKER ####################
+class loudspeaker():
+    def __init__(self):
+        pass
+
+    def add_change_listener(self, action, listener):
+        pass
+
+    # no need to implement other methods since the ftDuino
+    # has no speaker and thus the callback will never be called
+    
 ####################### OUTPUT FACTORY ####################
 def init_output_factory():
     pass
@@ -120,6 +148,25 @@ class led(output):
 class output_factory():
     def create_led(controller, port):
         return led(controller, port)
+
+####################### MOTOR FACTORY ####################
+def init_motor_factory():
+    pass
+
+class motor():
+    def __init__(self, controller, port):
+        self.controller = controller
+        self.port = port
+
+    def set_speed(self, val, dir):
+        self.controller.set_m_value(self.port, val, dir);
+
+    def start(self):
+        pass
+        
+class motor_factory():
+    def create_motor(controller, port):
+        return motor(controller, port)
 
 ####################### INPUT FACTORY ####################
 def init_input_factory():
@@ -157,7 +204,7 @@ class input():
         input.handler.append( { "obj": self, "ref": ref, "handler": callback,
                                 "value": self.controller.get_i_value(self.port) } )
             
-class push_button(input):
+class mini_switch(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
         controller.set_i_mode(port, "switch")
@@ -171,7 +218,7 @@ class push_button(input):
     def is_closed(self):
         return self.get_value() == False
         
-class photoresistor(input):
+class photo_resistor(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
         controller.set_i_mode(port, "resistance")
@@ -179,11 +226,25 @@ class photoresistor(input):
     def get_resistance(self):
         return int(self.get_value())
         
+class photo_transistor(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        
 class input_factory():
-    def create_push_button(controller, port):
-        return push_button(controller, port)
+    def create_mini_switch(controller, port):
+        return mini_switch(controller, port)
 
-    def create_photoresistor(controller, port):
-        return photoresistor(controller, port)
+    def create_photo_resistor(controller, port):
+        return photo_resistor(controller, port)
+    
+    def create_photo_transistor(controller, port):
+        return photo_transistor(controller, port)
 
+# recently added ...    
+def init():
+    pass
+
+def initialized():
+    return True
+    
 # todo: run a background process that talks to the ftduino

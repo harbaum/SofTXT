@@ -13,13 +13,19 @@ class fttxt2_gui_connector:
         if not fttxt2_gui_connector.app:
             print("ERROR: no app registered");
 
-    def run(self):
+    def open(self):
         pass
 
-    def running(self):
-        # return if the gui is still running
-        # TODO: fix this
+    def is_open(self):
         return True
+
+    def set_attr(self, item, str):
+        if fttxt2_gui_connector.app:
+            fttxt2_gui_connector.app.set_attr(item, str)
+            
+    def get_attr(self, item):
+        if fttxt2_gui_connector.app:
+            return fttxt2_gui_connector.app.get_attr(item)
     
     def checkbox_toggled(self, cbox, handler):
         if fttxt2_gui_connector.app:
@@ -41,6 +47,3 @@ class fttxt2_gui_connector:
         if fttxt2_gui_connector.app:
             fttxt2_gui_connector.app.install_handler(inp, "input_accepted", handler)
         
-    def exec_script(self, script):
-        if fttxt2_gui_connector.app:
-            fttxt2_gui_connector.app.execScript(script)

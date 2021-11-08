@@ -302,7 +302,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
     def console_handle(self, data):
         # add data to buffer an forward complete \n terminated lines only
-        self.console_buffer += data
+        self.console_buffer += data.replace("\r", "")
         lines = self.console_buffer.split("\n")
         if len(lines) > 1:
             for line in lines[:len(lines)-1]:

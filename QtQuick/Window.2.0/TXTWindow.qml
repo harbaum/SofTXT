@@ -4,9 +4,21 @@ import QtQuick.Templates 2.2 as T
 import QtQuick.Controls.Material 2.2
 
 T.ApplicationWindow {
-    signal execScript (string script)
+    id: win
+    signal execScript (string script, bool ret)
+    signal execResultStr (string result)
+    signal execResultBool (bool result)
     
-    onExecScript: eval(script)
+    onExecScript: {
+	  // run script and return result if requested
+	  var retval = eval(script)
+	  if(ret) {
+		  if(typeof(retval) == "boolean")
+		    	  win.execResultBool(retval)
+		  else
+		    	  win.execResultStr(retval)
+	  }
+    }
 
     visible: true
     width: 240
