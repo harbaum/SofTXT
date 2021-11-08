@@ -115,23 +115,36 @@ class controller_factory():
     def create_graphical_controller(ext = None):
         return ftduino(ext)
 
-####################### LOUDSPEAKER ####################
-class loudspeaker():
-    def __init__(self):
-        pass
-
-    def add_change_listener(self, action, listener):
-        pass
-
-    # no need to implement other methods since the ftDuino
-    # has no speaker and thus the callback will never be called
+########## root device inherited by all device types ##########
     
+class device():
+    def __init__(self):
+        self.listeners = { }
+    
+    def add_change_listener(self, action, listener):
+        print("add_change_listener({}, \"{}\", {})".format(self.name(), action, listener))
+        self.listeners[action] = listener
+
+    def runListener(self, action):
+        if action in self.listeners:
+            self.listeners[action]()
+        
+    def name(self):
+        return type(self).__name__
+
+####################### LOUDSPEAKER ####################
+class loudspeaker(device):
+    # no need to implement anything since the ftDuino
+    # has no speaker
+    pass
+
 ####################### OUTPUT FACTORY ####################
 def init_output_factory():
     pass
 
 class output():
     def __init__(self, controller, port):
+        super().__init__()
         self.controller = controller
         self.port = port
 
@@ -153,8 +166,9 @@ class output_factory():
 def init_motor_factory():
     pass
 
-class motor():
+class motor(device):
     def __init__(self, controller, port):
+        super().__init__()
         self.controller = controller
         self.port = port
 
@@ -172,11 +186,12 @@ class motor_factory():
 def init_input_factory():
     pass
 
-class input():
+class input(device):
     thread = None  # single global thread for all inputs
     handler = [ ]
     
     def __init__(self, controller, port):
+        super().__init__()
         self.controller = controller
         self.port = port
 
@@ -195,6 +210,7 @@ class input():
             time.sleep(POLL_DELAY)
         
     def add_change_listener(self, ref, callback):
+        print("ref", ref)
         # create background task if we don't have one yet
         if not input.thread:
             input.thread = threading.Thread(target=self.input_monitor, daemon=True)
