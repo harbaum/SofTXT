@@ -28,10 +28,10 @@ On the Linux PC you'll need the following packages (e.g. install them using apt-
 To use SofTXT simply clone this repository and run
 ```txt-4.0.py```. This will start a web server that listens on port
 8000 and provides the web API that ROBO Pro Coding expects to see. The
-server will store downloaded programs in the local directory and run
-the ```run.py``` script whenever an app is supposed to
-run. ```run.py``` and all other files are needed to execute downloaded
-programs.
+server will store downloaded programs in the local ```workspaces```
+directory and run the ```run.py``` script whenever an app is supposed
+to run. ```run.py``` and all other files are needed to execute
+downloaded programs.
 
 in order to access the SoftXT from RoboPro Coding enter ```<your linux
 ip>:8000``` as the IP address into the "Controller verbinden" dialog
