@@ -47,6 +47,7 @@ class bcolors:
 class MyHandler(BaseHTTPRequestHandler):
     def __init__(self, q, *args, **kwargs):
         self.queue = q
+        self.cmd_server_fd = None
         super().__init__(*args, **kwargs)
 
     def _set_headers(self, stream=False):
@@ -335,20 +336,32 @@ class MyHandler(BaseHTTPRequestHandler):
             if self.server_fd in r:
                 self.console_handle(os.read(self.server_fd,100).decode())
 
+            # frequently send a ping into the app
+            self.send( { "cmd": "ping" } )
+
         print("Console listener done");
         self.proc = None
         os.close(self.server_fd)
         os.close(self.client_fd)
+        os.close(self.cmd_server_fd)
+        os.close(self.cmd_client_fd)
+        self.cmd_server_fd = None
           
     def run(self, app):
         print("Running", app);
 
         self.proc = None
         self.server_fd, self.client_fd = pty.openpty()
+        self.cmd_server_fd, self.cmd_client_fd = pty.openpty()
         threading.Thread(target=self.console_listener, daemon=True).start()
         
-        self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdout=self.client_fd )
-                
+        self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdout=self.client_fd, stdin=self.cmd_client_fd )
+
+    def send(self, data):
+        # send data as nul terminated json into the subprocess
+        if self.cmd_server_fd:            
+            os.write(self.cmd_server_fd, (json.dumps(data)+"\0").encode("utf8"))
+        
     def do_POST(self):
         print("POST", self.path);
         info = self.parse_url(self.path)
