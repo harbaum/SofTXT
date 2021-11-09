@@ -1,4 +1,4 @@
-# SoftXT
+# SofTXT
 
 Simple pure software implementation of the upcoming fischertechnik
 TXT-4.0 controller [Video](https://youtu.be/1ub4-ASsy-U).
