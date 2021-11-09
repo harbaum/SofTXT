@@ -4,7 +4,10 @@ Simple pure software implementation of the upcoming fischertechnik
 TXT-4.0 controller [Video](https://youtu.be/1ub4-ASsy-U).
 
 These scripts implement the online behaviour of the TXT-4.0 and can be
-run as a client against ROBO Pro Coding.
+run as a client against [ROBO Pro
+Coding](https://docs.fischertechnik-cloud.com/books/robo-pro-coding)
+available e.g. for
+[Android](https://play.google.com/store/apps/details?id=eu.beemo.roboprocoding).
 
 ![Screenshot](screen.png)
 
