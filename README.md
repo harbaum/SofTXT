@@ -36,7 +36,7 @@ directory and run the ```run.py``` script whenever an app is supposed
 to run. ```run.py``` and all other files are needed to execute
 downloaded programs.
 
-in order to access the SoftXT from RoboPro Coding enter ```<your linux
+In order to access the SoftXT from RoboPro Coding enter ```<your linux
 ip>:8000``` as the IP address into the "Controller verbinden" dialog
 of ROBO Pro Coding. Replace <your linux ip> with the IP address of the
 Linux PC running SofTXT.
