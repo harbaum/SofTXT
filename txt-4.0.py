@@ -17,6 +17,8 @@
 #   - pipes stdout into stream
 #
 
+# curl -d "abc" -X POST http://localhost:8000/api/v1/application/Nase/start
+
 import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import time
@@ -45,9 +47,8 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 class MyHandler(BaseHTTPRequestHandler):
-    def __init__(self, q, *args, **kwargs):
-        self.queue = q
-        self.cmd_server_fd = None
+    def __init__(self, ctx, *args, **kwargs):
+        self.ctx = ctx
         super().__init__(*args, **kwargs)
 
     def _set_headers(self, stream=False):
@@ -160,8 +161,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 if len(parts) > 1:
                     if parts[0] == "send-command":
                         print(bcolors.OKCYAN + "VoiceCommand: \"{}\"".format(unquote(parts[1])) + bcolors.ENDC)
-                        # the reply should contain infos about the running app
-                        reply["application"] = "application name"
+                        reply["remote"] = unquote(parts[1])
                         parts = parts[2:]
                     else:
                         print(bcolors.FAIL + "unexpected remote command: " + parts[0] + bcolors.ENDC)
@@ -260,7 +260,7 @@ class MyHandler(BaseHTTPRequestHandler):
                 else:
                     try:
                         # check if there's data in the queue
-                        data = self.queue.get(True, .1)
+                        data = self.ctx["queue"].get(True, .1)
                         if "text" in data:
                             msg = [ { "type": "text", "data": [ data["text"]  ] } ]
                     except:
@@ -319,14 +319,14 @@ class MyHandler(BaseHTTPRequestHandler):
         lines = self.console_buffer.split("\n")
         if len(lines) > 1:
             for line in lines[:len(lines)-1]:
-                    self.queue.put( { "text": line } )
+                    self.ctx["queue"].put( { "text": line } )
 
             self.console_buffer = lines[-1]
                 
     # thread to listen for incoming text data from app
     def console_listener(self):
         self.console_buffer = ""
-        
+
         # do this while no execption has accured and while the
         # process is either starting up or running.
         e = []
@@ -337,30 +337,31 @@ class MyHandler(BaseHTTPRequestHandler):
                 self.console_handle(os.read(self.server_fd,100).decode())
 
             # frequently send a ping into the app
-            self.send( { "cmd": "ping" } )
+            self.send( { "ping": None } )
 
         print("Console listener done");
         self.proc = None
         os.close(self.server_fd)
         os.close(self.client_fd)
-        os.close(self.cmd_server_fd)
+        os.close(self.ctx["cmd_server_fd"])
         os.close(self.cmd_client_fd)
-        self.cmd_server_fd = None
+        self.ctx["cmd_server_fd"] = None
           
     def run(self, app):
         print("Running", app);
 
         self.proc = None
         self.server_fd, self.client_fd = pty.openpty()
-        self.cmd_server_fd, self.cmd_client_fd = pty.openpty()
+        self.cmd_client_fd, self.ctx["cmd_server_fd"] = pty.openpty()
         threading.Thread(target=self.console_listener, daemon=True).start()
         
         self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdout=self.client_fd, stdin=self.cmd_client_fd )
+        # self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdin=self.cmd_client_fd )   # without out redirection
 
     def send(self, data):
-        # send data as nul terminated json into the subprocess
-        if self.cmd_server_fd:            
-            os.write(self.cmd_server_fd, (json.dumps(data)+"\0").encode("utf8"))
+        # send data as newline terminated json into the subprocess
+        if self.ctx["cmd_server_fd"]:
+            os.write(self.ctx["cmd_server_fd"], (json.dumps(data)+"\n").encode("utf8"))
         
     def do_POST(self):
         print("POST", self.path);
@@ -370,10 +371,15 @@ class MyHandler(BaseHTTPRequestHandler):
             return
 
         self._set_headers()
-        content_len = int(self.headers.get('Content-Length'))
+        content_len = self.headers.get('Content-Length')
         content_type = self.headers.get('Content-Type')
-        post_body = self.rfile.read(content_len)
 
+        if content_len:
+            content_len = int(content_len)        
+            post_body = self.rfile.read(content_len)
+        else:
+            post_body = None
+            
         if post_body:
             if content_type == "application/json":
                 # run body through a json parser
@@ -391,9 +397,12 @@ class MyHandler(BaseHTTPRequestHandler):
                     self.save_workspace(info["workspaces"], post_data);
             else:
                 print(bcolors.FAIL + "Unexpected content-type:" + content_type + bcolors.ENDC)
-                
+
         if "application" in info and "cmd" in info and info["cmd"] == "start":
             self.run(info["application"])
+
+        if "remote" in info:
+            self.send( { "remote": info["remote"] })
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
@@ -403,8 +412,8 @@ def run(addr="localhost", port=8000):
     server_address = (addr, port)
 
     # create queue for console message stream (and perhaps later also
-    # device port states for the "Schnittstellentest")
-    handler = partial(MyHandler, queue.Queue())
+    # device port states for the "Schnittstellentest").
+    handler = partial(MyHandler, { "queue": queue.Queue() } )
     httpd = ThreadedHTTPServer(server_address, handler)
 
     print(f"Starting TXT-4.0 server on {addr}:{port}")

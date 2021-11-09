@@ -21,8 +21,8 @@
 
 from PyQt5.QtQml import QQmlApplicationEngine
 from PyQt5.QtWidgets import QApplication, QLabel
-from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
-import sys, os, time, queue
+from PyQt5.QtCore import QThread, QObject, QTimer, pyqtSignal, pyqtSlot
+import sys, os, time, queue, select
 import json
 
 # fischertechnik seems to have placed their own custom
@@ -31,6 +31,7 @@ import json
 # our objects there to not mess with the qt installation
 
 import ftgui
+from fischertechnik.control.VoiceControl import VoiceControl
 
 class AppRunnerThread(QThread):
     finished = pyqtSignal()
@@ -49,7 +50,7 @@ class AppRunnerThread(QThread):
             exec(self.code, {})
         
         self.finished.emit()
-        
+            
 class RunApplication(QApplication):
     doExecScript = pyqtSignal(str, bool)
 
@@ -146,11 +147,36 @@ class RunApplication(QApplication):
 
         # check if something was loaded
         return bool(self.engine.rootObjects())
-    
+
+    def on_timer(self):
+        if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            line = sys.stdin.readline()
+            data = None
+            if line:
+                # whatever we are reading here is supposed to be json encoded
+                # and since we are reading a full line it
+                # xyz
+                try:
+                    data = json.loads(line)
+                except:
+                    # ignore any malformed json input
+                    pass
+
+            if data:
+                # currently only remote commands are supported
+                if "remote" in data:
+                    for listener in  VoiceControl.listeners:
+                        listener(data["remote"])
+
     def __init__(self, args):
         QApplication.__init__(self, args)
 
         self.handlers = { }
+
+        # create a timer to periodically check stdin for input
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.on_timer)
+        self.timer.start(10)
 
         # queue to pass attribute results from the gui into the app
         self.queue = queue.Queue()
