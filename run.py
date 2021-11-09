@@ -140,7 +140,10 @@ class RunApplication(QApplication):
         self.engine.addImportPath(os.path.dirname(os.path.realpath(__file__)))
         self.engine.load(qml)
 
-        win = self.engine.rootObjects()[0]        
+        win = self.engine.rootObjects()[0]
+        if len(self.path.split("/")) >= 2:
+            win.setTitle(self.path.split("/")[-2])
+        
         self.doExecScript.connect(win.execScript)
         win.execResultStr.connect(self.execResult)
         win.execResultBool.connect(self.execResult)

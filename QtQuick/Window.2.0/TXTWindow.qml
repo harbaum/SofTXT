@@ -4,6 +4,8 @@ import QtQuick.Templates 2.2 as T
 import QtQuick.Controls.Material 2.2
 
 T.ApplicationWindow {
+    title: "SofTXT"
+    
     id: win
     signal execScript (string script, bool ret)
     signal execResultStr (string result)
