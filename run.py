@@ -153,7 +153,11 @@ class RunApplication(QApplication):
 
     def on_timer(self):
         if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-            line = sys.stdin.readline()
+            try:
+                line = sys.stdin.readline()
+            except:
+                line = None
+                
             data = None
             if line:
                 # whatever we are reading here is supposed to be json encoded

@@ -285,11 +285,16 @@ class MyHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         print("DELETE", self.path);
-        if not self.parse_url(self.path):
+        
+        info = self.parse_url(self.path)
+        if not info:
             self.send_error(404);
             return
         
         self._set_headers()
+
+        if "cmd" in info and info["cmd"] == "stop":
+            self.stop()
 
     def parse_multipart(self, ct, data):
         # assemble message
@@ -330,7 +335,7 @@ class MyHandler(BaseHTTPRequestHandler):
         # do this while no execption has accured and while the
         # process is either starting up or running.
         e = []
-        while len(e) == 0 and (self.proc == None or self.proc.poll() == None):
+        while len(e) == 0 and (self.ctx["proc"] == None or self.ctx["proc"].poll() == None):
             r, w, e = select.select([self.server_fd], [], [self.server_fd], 1)
             
             if self.server_fd in r:
@@ -340,23 +345,29 @@ class MyHandler(BaseHTTPRequestHandler):
             self.send( { "ping": None } )
 
         print("Console listener done");
-        self.proc = None
+        self.ctx["proc"] = None
         os.close(self.server_fd)
         os.close(self.client_fd)
         os.close(self.ctx["cmd_server_fd"])
         os.close(self.cmd_client_fd)
         self.ctx["cmd_server_fd"] = None
           
+    def stop(self):
+        if "proc" in self.ctx and self.ctx["proc"]:
+            print("Stopping running process")
+            self.ctx["proc"].terminate()
+            self.ctx["proc"] = None
+        
     def run(self, app):
         print("Running", app);
 
-        self.proc = None
+        self.ctx["proc"] = None
         self.server_fd, self.client_fd = pty.openpty()
         self.cmd_client_fd, self.ctx["cmd_server_fd"] = pty.openpty()
         threading.Thread(target=self.console_listener, daemon=True).start()
         
-        self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdout=self.client_fd, stdin=self.cmd_client_fd )
-        # self.proc = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdin=self.cmd_client_fd )   # without out redirection
+        self.ctx["proc"] = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdout=self.client_fd, stdin=self.cmd_client_fd )
+        # self.ctx["proc"] = subprocess.Popen( [ os.path.join(BASE, RUNNER), app ], stdin=self.cmd_client_fd )   # without out redirection
 
     def send(self, data):
         # send data as newline terminated json into the subprocess
@@ -400,7 +411,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
         if "application" in info and "cmd" in info and info["cmd"] == "start":
             self.run(info["application"])
-
+            
         if "remote" in info:
             self.send( { "remote": info["remote"] })
 
