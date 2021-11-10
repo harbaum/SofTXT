@@ -11,7 +11,8 @@ available e.g. for
 
 ![Screenshot](screen.png)
 
-Optional for physical IO a ftDuino running the [IOServer](https://github.com/harbaum/ftduino/tree/master/ftduino/libraries/WebUSB/examples/IoServer) sketch is supported.
+Optionally and for physical fischertechnik inputs and outputs a
+ftDuino is supported.
 
 ## Howto
 
@@ -20,6 +21,7 @@ You'll need
 - A device running RoboPro Coding
   - tested with Android RoboPro Coding 6.0.4
 - A linux PC running SofTXT (this project)
+  - Optionally connected via USB to a [ftDuino](http://ftduino.de) running the [IoServer sketch](https://github.com/harbaum/ftduino/tree/master/ftduino/libraries/WebUSB/examples/IoServer)
 
 On the Linux PC you'll need the following packages (e.g. install them using apt-get):
 
