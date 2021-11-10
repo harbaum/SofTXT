@@ -52,9 +52,9 @@ class ftduino():
         self.send(json.dumps(cmd))
         self.lock.release()
 
-    def set_m_value(self, port, val, dir):
+    def set_m_value(self, port, val, mode):
         val = (val * 255)//512        
-        cmd = { "set": { "port": "m"+str(port), "value": val, "mode": "right" if dir ==  Motor.CW else "left" } }
+        cmd = { "set": { "port": "m"+str(port), "value": val, "mode": mode } }
         self.lock.acquire()
         self.send(json.dumps(cmd))
         self.lock.release()
@@ -180,14 +180,13 @@ class motor(device):
         self.cal = val
 
     def start(self):
-        self.controller.set_m_value(self.port, self.val, self.dir);
+        self.controller.set_m_value(self.port, self.val, "right" if self.dir ==  Motor.CW else "left" )
         
     def stop(self):
-        self.controller.set_m_value(self.port, 0, self.dir);
+        self.controller.set_m_value(self.port, 0, "brake");
         
     def coast(self):
-        # TODO: current IO Server does not support coasting
-        self.controller.set_m_value(self.port, 0, self.dir);
+        self.controller.set_m_value(self.port, 0, "open");
         
 class encodermotor(motor):
     def __init__(self, controller, port):
@@ -238,39 +237,56 @@ class input(device):
         input.handler.append( { "obj": self, "ref": ref, "handler": callback,
                                 "value": self.controller.get_i_value(self.port) } )
             
-class mini_switch(input):
+class input_switch(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
         controller.set_i_mode(port, "switch")
 
     def get_state(self):
         return self.get_value()
+    
+class input_resistance(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        controller.set_i_mode(port, "resistance")
 
+    def get_resistance(self):
+        return self.get_value()
+    
+class input_voltage(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        controller.set_i_mode(port, "voltage")
+
+    def get_voltage(self):
+        return self.get_value()
+    
+class mini_switch(input_switch):
     def is_open(self):
         return self.get_value()
 
     def is_closed(self):
         return not self.get_value()
         
-class photo_resistor(input):
-    def __init__(self, controller, port):
-        super().__init__(controller, port)
-        controller.set_i_mode(port, "resistance")
-
-    def get_resistance(self):
-        return int(self.get_value())
+class photo_resistor(input_resistance):
+    pass
         
-class photo_transistor(input):
-    def __init__(self, controller, port):
-        super().__init__(controller, port)
-        controller.set_i_mode(port, "switch")
-
+class photo_transistor(input_switch):
     def is_dark(self):
         return self.get_value()
     
     def is_bright(self):
         return not self.get_value()
+
+class ntc_resistor(input_resistance):
+    pass
+
+class color_sensor(input_voltage):
+    pass
         
+class trail_follower(input_voltage):
+    pass
+
 class ultrasonic_distance_meter(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
@@ -290,6 +306,15 @@ class input_factory():
 
     def create_ultrasonic_distance_meter(controller, port):
         return ultrasonic_distance_meter(controller, port)
+
+    def create_ntc_resistor(controller, port):
+        return ntc_resistor(controller, port)
+
+    def create_color_sensor(controller, port):
+        return color_sensor(controller, port)
+    
+    def create_trail_follower(controller, port):
+        return trail_follower(controller, port)
 
 # recently added ...    
 def init():
