@@ -172,15 +172,33 @@ class motor(device):
         self.controller = controller
         self.port = port
 
+        self.val = 0
+        self.dir = Motor.CW
+
     def set_speed(self, val, dir):
-        self.controller.set_m_value(self.port, val, dir);
+        self.dir = dir
+        self.cal = val
 
     def start(self):
-        pass
+        self.controller.set_m_value(self.port, self.val, self.dir);
         
+    def stop(self):
+        self.controller.set_m_value(self.port, 0, self.dir);
+        
+    def coast(self):
+        # TODO: current IO Server does not support coasting
+        self.controller.set_m_value(self.port, 0, self.dir);
+        
+class encodermotor(motor):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+
 class motor_factory():
     def create_motor(controller, port):
         return motor(controller, port)
+
+    def create_encodermotor(controller, port):
+        return encodermotor(controller, port)
 
 ####################### INPUT FACTORY ####################
 def init_input_factory():
@@ -229,10 +247,10 @@ class mini_switch(input):
         return self.get_value()
 
     def is_open(self):
-        return self.get_value() == True
+        return self.get_value()
 
     def is_closed(self):
-        return self.get_value() == False
+        return not self.get_value()
         
 class photo_resistor(input):
     def __init__(self, controller, port):
@@ -245,7 +263,21 @@ class photo_resistor(input):
 class photo_transistor(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
+        controller.set_i_mode(port, "switch")
+
+    def is_dark(self):
+        return self.get_value()
+    
+    def is_bright(self):
+        return not self.get_value()
         
+class ultrasonic_distance_meter(input):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+
+    def get_distance(self):
+        return 0
+
 class input_factory():
     def create_mini_switch(controller, port):
         return mini_switch(controller, port)
@@ -255,6 +287,9 @@ class input_factory():
     
     def create_photo_transistor(controller, port):
         return photo_transistor(controller, port)
+
+    def create_ultrasonic_distance_meter(controller, port):
+        return ultrasonic_distance_meter(controller, port)
 
 # recently added ...    
 def init():
