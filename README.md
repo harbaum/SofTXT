@@ -46,4 +46,7 @@ $ ./txt-4.0.py
 Starting TXT-4.0 server on http://10.11.13.34:8000
 ```
 
+You can give anything for ```API-Schlüssel``` as this is not verified
+by SofTXT.
+
 ![Connect](connect.png)
