@@ -17,12 +17,13 @@
 #   - pipes stdout into stream
 #
 
-# curl -d "abc" -X POST http://localhost:8000/api/v1/application/Nase/start
+# curl -X POST http://localhost:8000/api/v1/application/project/start
 
 import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import time
 import json
+import socket
 from socketserver import ThreadingMixIn
 import email.parser
 from pathlib import Path
@@ -418,6 +419,18 @@ class MyHandler(BaseHTTPRequestHandler):
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
     
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # just some dummy adress, doesn't even have to be reachable
+        s.connect(('8.8.8.8', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
 # run main HTTPServer
 def run(addr="localhost", port=8000):
     server_address = (addr, port)
@@ -427,7 +440,11 @@ def run(addr="localhost", port=8000):
     handler = partial(MyHandler, { "queue": queue.Queue() } )
     httpd = ThreadedHTTPServer(server_address, handler)
 
-    print(f"Starting TXT-4.0 server on {addr}:{port}")
+    # if no addr was given (which is default behaviour), then
+    # try to display the address used with the default route
+    if not addr: addr = get_ip()
+ 
+    print(f"Starting TXT-4.0 server on http://{addr}:{port}")
     httpd.serve_forever()
     
 if __name__ == "__main__":

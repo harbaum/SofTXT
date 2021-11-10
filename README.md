@@ -39,4 +39,11 @@ downloaded programs.
 In order to access the SoftXT from RoboPro Coding enter ```<your linux
 ip>:8000``` as the IP address into the "Controller verbinden" dialog
 of ROBO Pro Coding. Replace <your linux ip> with the IP address of the
-Linux PC running SofTXT.
+Linux PC running SofTXT displayed by ```txt-4.0.py``` as shown below:
+
+```
+$ ./txt-4.0.py
+Starting TXT-4.0 server on http://10.11.13.34:8000
+```
+
+![Connect](connect.png)
