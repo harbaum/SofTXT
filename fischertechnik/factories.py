@@ -9,6 +9,8 @@ import serial.tools.list_ports
 
 from fischertechnik.controller.Motor import Motor
 
+from sensors import bmx055
+
 FTDUINO_VIDPID = "1c40:0538"
 POLL_DELAY = .1  # poll inputs every 100ms for "Starte jedes mal" blocks
 
