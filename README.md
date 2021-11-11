@@ -21,7 +21,7 @@ You'll need
 - A device running RoboPro Coding
   - tested with Android RoboPro Coding 6.0.4
 - A linux PC running SofTXT (this project)
-  - Optionally connected via USB to a [ftDuino](http://ftduino.de) running the [IoServer sketch](https://github.com/harbaum/ftduino/tree/master/ftduino/libraries/WebUSB/examples/IoServer)
+  - Optionally connected via USB to a [ftDuino](http://ftduino.de) running the [IoServer sketch](IoServer)
 
 On the Linux PC you'll need the following packages (e.g. install them using apt-get):
 
