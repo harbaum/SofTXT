@@ -23,7 +23,7 @@ from PyQt5.QtQml import QQmlApplicationEngine
 from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtCore import QThread, QObject, QTimer, pyqtSignal, pyqtSlot
 import sys, os, time, queue, select
-import json
+import json, traceback
 
 # fischertechnik seems to have placed their own custom
 # widgets in one of the standard modules which they import
@@ -47,7 +47,10 @@ class AppRunnerThread(QThread):
     def run(self):
         # run if there's code
         if self.code:
-            exec(self.code, {})
+            try:
+                exec(self.code, {})
+            except Exception as e:
+                print(traceback.format_exc())
         
         self.finished.emit()
             

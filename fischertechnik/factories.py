@@ -4,7 +4,7 @@
 
 import threading, time
 
-import serial, json, select
+import serial, json, select, math
 import serial.tools.list_ports
 
 from fischertechnik.controller.Motor import Motor
@@ -237,7 +237,7 @@ class input(device):
         input.handler.append( { "obj": self, "ref": ref, "handler": callback,
                                 "value": self.controller.get_i_value(self.port) } )
             
-class input_switch(input):
+class input_state(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
         controller.set_i_mode(port, "switch")
@@ -261,7 +261,7 @@ class input_voltage(input):
     def get_voltage(self):
         return self.get_value()
     
-class mini_switch(input_switch):
+class mini_switch(input_state):
     def is_open(self):
         return self.get_value()
 
@@ -271,7 +271,7 @@ class mini_switch(input_switch):
 class photo_resistor(input_resistance):
     pass
         
-class photo_transistor(input_switch):
+class photo_transistor(input_state):
     def is_dark(self):
         return self.get_value()
     
@@ -279,17 +279,29 @@ class photo_transistor(input_switch):
         return not self.get_value()
 
 class ntc_resistor(input_resistance):
-    pass
+    K2C = 273.15         # offset kelvin to deg celsius
+    B = 3900.0           # b value of sensor
+    R_N = 1500.0         # resistance at 25 deg c
+    T_N = (K2C + 25.0)   # reference temperature in kelvin
+
+    def get_temperature(self):
+        # convert resistance into deg c
+        r = self.get_value()
+        if r == None: return None
+        t = ntc_resistor.T_N * ntc_resistor.B / (ntc_resistor.B + ntc_resistor.T_N * math.log(r / ntc_resistor.R_N));
+        return t - ntc_resistor.K2C
 
 class color_sensor(input_voltage):
     pass
         
-class trail_follower(input_voltage):
+class trail_follower(input_state):
+    # this is technically just a photo transistor
     pass
 
 class ultrasonic_distance_meter(input):
     def __init__(self, controller, port):
         super().__init__(controller, port)
+        print("WARNING: ultrasonic_distance_meter on I{} not supported by ftDuino".format(port))
 
     def get_distance(self):
         return 0
