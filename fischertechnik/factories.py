@@ -154,14 +154,71 @@ class output():
 class led(output):
     def __init__(self, controller, port):
         super().__init__(controller, port)
+        self.brightness = 0
+    
+    def set_brightness(self, brightness):
+        self.brightness = brightness
+        self.set(brightness)
+    
+    def get_brightness(self):
+        return self.brightness
+        
+class output_on_off(output):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        self.val = 0
 
-    def set_brightness(self, val):
-        self.set(val)
+    def on(self):
+        self.val = 512
+        self.set(512)
+
+    def off(self):
+        self.val = 0
+        self.set(0)
+        
+    def is_on(self):
+        return self.val != 0
+
+    def is_off(self):
+        return self.val == 0
+    
+class magnetic_valve(output_on_off):
+    pass
+
+class compressor(output_on_off):
+    pass
+
+class unidirectional_motor(output):
+    def __init__(self, controller, port):
+        super().__init__(controller, port)
+        self.speed = 0
+    
+    def set_speed(self, speed):
+        self.speed = speed
+        self.set(speed)
+    
+    def get_speed(self):
+        return self.speed
+
+    def is_running(self):
+        return self.speed != 0
+
+    def stop(self):
+        self.set_speed(0)
     
 class output_factory():
     def create_led(controller, port):
         return led(controller, port)
 
+    def create_magnetic_valve(controller, port):
+        return magnetic_valve(controller, port)
+
+    def create_compressor(controller, port):
+        return compressor(controller, port)
+
+    def create_unidirectional_motor(controller, port):
+        return unidirectional_motor(controller, port)
+    
 ####################### MOTOR FACTORY ####################
 def init_motor_factory():
     pass
