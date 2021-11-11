@@ -118,8 +118,10 @@ class controller_factory():
 ########## root device inherited by all device types ##########
     
 class device():
-    def __init__(self):
+    def __init__(self, controller, port):
         self.listeners = { }
+        self.controller = controller
+        self.port = port
     
     def add_change_listener(self, action, listener):
         print("add_change_listener({}, \"{}\", {})".format(self.name(), action, listener))
@@ -142,12 +144,7 @@ class loudspeaker(device):
 def init_output_factory():
     pass
 
-class output():
-    def __init__(self, controller, port):
-        super().__init__()
-        self.controller = controller
-        self.port = port
-
+class output(device):
     def set(self, val):
         self.controller.set_o_value(self.port, val);
         
@@ -225,9 +222,7 @@ def init_motor_factory():
 
 class motor(device):
     def __init__(self, controller, port):
-        super().__init__()
-        self.controller = controller
-        self.port = port
+        super().__init__(controller, port)
 
         self.val = 0
         self.dir = Motor.CW
@@ -264,11 +259,6 @@ class input(device):
     thread = None  # single global thread for all inputs
     handler = [ ]
     
-    def __init__(self, controller, port):
-        super().__init__()
-        self.controller = controller
-        self.port = port
-
     def get_value(self):
         return self.controller.get_i_value(self.port)
     
@@ -385,6 +375,132 @@ class input_factory():
     def create_trail_follower(controller, port):
         return trail_follower(controller, port)
 
+####################### I2C FACTORY ####################
+def init_i2c_factory():
+    pass
+
+class i2c_sensor(device):
+    def __init__(self, controller, port):
+        pass
+
+class gesture_sensor(i2c_sensor):
+    def enable_light(self):
+        pass
+    
+    def disable_light(self):
+        pass
+
+    def enable_proximity(self):
+        pass
+    
+    def disable_proximity(self):
+        pass
+
+    def enable_gesture(self):
+        pass
+    
+    def disable_gesture(self):
+        pass
+
+    def get_hex(self):
+        return None
+    
+    def get_rgb(self):
+        return None
+    
+    def get_rgb_red(self):
+        return None
+
+    def get_rgb_green(self):
+        return None
+
+    def get_rgb_blue(self):
+        return None
+
+    def get_rgb_hsv(self):
+        return None
+
+    def get_rgb_hsv_hue(self):
+        return None
+    
+    def get_rgb_hsv_saturation(self):
+        return None
+    
+    def get_rgb_hsv_value(self):
+        return None
+    
+    def get_ambient(self):
+        return None
+
+class environment_sensor(i2c_sensor):
+    def calibrate(self):
+        pass
+
+    def get_humidity(self):
+        return None
+
+    def get_indoor_air_quality_as_number(self):
+        return None
+    
+    def get_indoor_air_quality_as_text(self):
+        return None
+
+    def get_pressure(self):
+        return None
+
+    def get_temperature(self):
+        return None
+
+    def needs_calibration(self):
+        return None
+
+class combined_sensor(i2c_sensor):
+    def init_accelerometer(self, range, bandwidth, compensation):
+        pass
+    
+    def init_magnetometer(self, rate):
+        pass
+    
+    def init_gyrometer(self, range, bandwidth, compensation):
+        pass
+
+    def get_acceleration_x(self):
+        return None
+    
+    def get_acceleration_y(self):
+        return None
+    
+    def get_acceleration_z(self):
+        return None
+
+    def get_magnetic_field_x(self):
+        return None
+    
+    def get_magnetic_field_y(self):
+        return None
+    
+    def get_magnetic_field_z(self):
+        return None
+
+    def get_rotation_x(self):
+        return None
+    
+    def get_rotation_y(self):
+        return None
+    
+    def get_rotation_z(self):
+        return None
+    
+class i2c_factory():
+    def create_gesture_sensor(controller, port):
+        return gesture_sensor(controller, port)
+    
+    def create_environment_sensor(controller, port):
+        return environment_sensor(controller, port)
+
+    def create_combined_sensor(controller, port):
+        return combined_sensor(controller, port)
+    
 # recently added ...    
 def init():
     pass
