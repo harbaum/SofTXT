@@ -6,6 +6,7 @@
 
 #ifdef ARDUINO
 #include <Ftduino.h>
+#include <Wire.h>
 #else
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +42,9 @@ extern WebUSB WebUSBSerial;
 #define ERR_INT         16  // internal error
 #define ERR_ILL_REQ     17  // illegal get request
 #define ERR_ILL_TYPE    18  // illegal (counter) type specification
+#define ERR_WRONG_ATYPE 19  // wrong address type
+#define ERR_WRONG_RTYPE 20  // wrong register type
+#define ERR_INC_I2C     21  // incomplete i2c request
 
 void JsonParser::reply_error(char id) {
 #ifdef ARDUINO
@@ -74,6 +78,10 @@ void JsonParser::reply_value(char *port, bool b, uint16_t v) {
 
 JsonParser::JsonParser() {
   reset();
+
+#ifdef ARDUINO
+  Wire.begin();
+#endif
 }
 
 void JsonParser::cmd_reset(void) {
@@ -82,8 +90,10 @@ void JsonParser::cmd_reset(void) {
   parm = PARM_NONE;
   type = TYPE_NONE;
   req = REQ_NONE;
+  addr_reg.valid = 0;
   port.type = port::PORT_NONE;
   value.valid = false;
+  value.length = 0;
 }
 
 void JsonParser::reset(void) {
@@ -151,8 +161,10 @@ void JsonParser::check_name(void) {
       parm = PARM_VALUE;
     else if(strcmp(substate_value.value.str, "mode") == 0)
       parm = PARM_MODE;
-    else if(strcmp(substate_value.value.str, "type") == 0)
-      parm = PARM_TYPE;
+    else if(strcmp(substate_value.value.str, "addr") == 0)
+      parm = PARM_ADDR;
+    else if(strcmp(substate_value.value.str, "reg") == 0)
+      parm = PARM_REG;
     else
       reply_error(ERR_UNK_PARM);   
   }
@@ -169,12 +181,10 @@ void JsonParser::lowercase_str(void) {
 
 void JsonParser::check_value(void) {
   lowercase_str();  // value string are all case insensitive
-
+  
   if(cmd == CMD_GET) {
-	
+    
     if((depth == 1) && parm == PARM_TYPE) {
-      printf("PARM TYPE %s\n", substate_value.value.str);
-
       if(startsWith(substate_value.value.str, "state"))
 	type = TYPE_STATE;
       else if(startsWith(substate_value.value.str, "counter"))
@@ -182,7 +192,7 @@ void JsonParser::check_value(void) {
       else
 	reply_error(ERR_ILL_TYPE);
     }
-      
+    
     if((depth == 1) && (parm == PARM_PORT)) {
       port.type = port::PORT_NONE;
       port.index = substate_value.value.str[1] -'0' - 1;
@@ -195,6 +205,8 @@ void JsonParser::check_value(void) {
 	  else if((substate_value.value.str[0] == 'c') &&
 		  (port.index >= 0) && (port.index <= 3)) 
 	    port.type = port::PORT_C;
+	  else if(strcmp(substate_value.value.str, "i2c") == 0)
+	    port.type = port::PORT_I2C;
 	  else
 	    reply_error(ERR_ILL_PORT);
 	} else
@@ -202,22 +214,22 @@ void JsonParser::check_value(void) {
       } else
 	reply_error(ERR_WRONG_VTYPE);     
     }
-      
+    
     // the request for "devices" comes as a value
     if(depth == 0) {
       // printf("GET %s\n", substate_value.value.str);
       if(substate_value.type == value::TYPE_STR) {
       	if(startsWith(substate_value.value.str, "devices"))
-	        req = REQ_DEVS;
+	  req = REQ_DEVS;
         else if(startsWith(substate_value.value.str, "version"))
           req = REQ_VER;
       	else
-	        reply_error(ERR_ILL_REQ);
+	  reply_error(ERR_ILL_REQ);
       } else
       	reply_error(ERR_WRONG_VTYPE);
     }
   }
-    
+  
   if(cmd == CMD_SET) {
     // parse with respect to the parameter name
     // all set parameters are within sub-objects at depth 1
@@ -229,70 +241,93 @@ void JsonParser::check_value(void) {
       	if(substate_value.type == value::TYPE_STR) {
           if(startsWith(substate_value.value.str, "led"))
             port.type = port::PORT_LED;
-          else {      
-	          port.index = substate_value.value.str[1] -'0' - 1;
-	          // check for inputs or outputs 1-8, counters ...
-	          if(strlen(substate_value.value.str) == 2) {
-	            if((substate_value.value.str[0] == 'i') &&
-	              (port.index >= 0) && (port.index <= 7)) 
-	              port.type = port::PORT_I;
-	            else if((substate_value.value.str[0] == 'o') &&
-		            (port.index >= 0) && (port.index <= 7)) 
-	              port.type = port::PORT_O;
-	            else if((substate_value.value.str[0] == 'c') &&
-		            (port.index >= 0) && (port.index <= 3)) 
-	              port.type = port::PORT_C;
-	            else if((substate_value.value.str[0] == 'm') &&
-		            (port.index >= 0) && (port.index <= 3)) 
-	              port.type = port::PORT_M;
-	            else
-      	        reply_error(ERR_ILL_PORT);
-  	        } else
-	            reply_error(ERR_ILL_PORT);
+          else {
+	    port.index = substate_value.value.str[1] -'0' - 1;
+	    // check for inputs or outputs 1-8, counters ...
+	    if(strlen(substate_value.value.str) == 2) {
+	      if((substate_value.value.str[0] == 'i') &&
+		 (port.index >= 0) && (port.index <= 7)) 
+		port.type = port::PORT_I;
+	      else if((substate_value.value.str[0] == 'o') &&
+		      (port.index >= 0) && (port.index <= 7)) 
+		port.type = port::PORT_O;
+	      else if((substate_value.value.str[0] == 'c') &&
+		      (port.index >= 0) && (port.index <= 3)) 
+		port.type = port::PORT_C;
+	      else if((substate_value.value.str[0] == 'm') &&
+		      (port.index >= 0) && (port.index <= 3)) 
+		port.type = port::PORT_M;
+	      else
+		reply_error(ERR_ILL_PORT);
+	    } else if(strcmp(substate_value.value.str, "i2c") == 0)
+	      port.type = port::PORT_I2C;
+	    else
+	      reply_error(ERR_ILL_PORT);
           }
-	      } else
-	        reply_error(ERR_WRONG_VTYPE);
+	} else
+	  reply_error(ERR_WRONG_VTYPE);
 	
       } else if(parm == PARM_MODE) {
       	if(substate_value.type == value::TYPE_STR) {
 	  
-	        if(startsWith(substate_value.value.str, "high"))
-	          mode = MODE_HI;
+	  if(startsWith(substate_value.value.str, "high"))
+	    mode = MODE_HI;
       	  else if(startsWith(substate_value.value.str, "low"))
-	          mode = MODE_LO;
-	        else if(startsWith(substate_value.value.str, "open") ||
+	    mode = MODE_LO;
+	  else if(startsWith(substate_value.value.str, "open") ||
                   startsWith(substate_value.value.str, "off"))
-	          mode = MODE_OPEN;
-	        else if(startsWith(substate_value.value.str, "voltage"))
-	          mode = MODE_U;
-	        else if(startsWith(substate_value.value.str, "resistance"))
-	          mode = MODE_R;
-	        else if(startsWith(substate_value.value.str, "switch"))
-	          mode = MODE_SW;
-	        else if(startsWith(substate_value.value.str, "left"))
-	          mode = MODE_LEFT;
-	        else if(startsWith(substate_value.value.str, "right"))
-	          mode = MODE_RIGHT;
-	        else if(startsWith(substate_value.value.str, "brake"))
-	          mode = MODE_BRAKE;
-	        else
-	          reply_error(ERR_ILL_MODE);
+	    mode = MODE_OPEN;
+	  else if(startsWith(substate_value.value.str, "voltage"))
+	    mode = MODE_U;
+	  else if(startsWith(substate_value.value.str, "resistance"))
+	    mode = MODE_R;
+	  else if(startsWith(substate_value.value.str, "switch"))
+	    mode = MODE_SW;
+	  else if(startsWith(substate_value.value.str, "left"))
+	    mode = MODE_LEFT;
+	  else if(startsWith(substate_value.value.str, "right"))
+	    mode = MODE_RIGHT;
+	  else if(startsWith(substate_value.value.str, "brake"))
+	    mode = MODE_BRAKE;
+	  else
+	    reply_error(ERR_ILL_MODE);
       	} else
-	        reply_error(ERR_WRONG_VTYPE);
-
-	    } else if(parm == PARM_VALUE) {
+	  reply_error(ERR_WRONG_VTYPE);
+	
+      } else if(parm == PARM_ADDR) {
         if(substate_value.type == value::TYPE_NUM) {
-          value.valid = true;
-          value.type = VALUE_TYPE_NUM;
-	        value.v = substate_value.value.num;
+	  addr_reg.valid |= 1;
+	  addr_reg.addr = substate_value.value.num;
+      	} else
+	  reply_error(ERR_WRONG_ATYPE);
+	
+      } else if(parm == PARM_REG) {
+        if(substate_value.type == value::TYPE_NUM) {
+	  addr_reg.valid |= 2;
+	  addr_reg.reg = substate_value.value.num;
+      	} else
+	  reply_error(ERR_WRONG_RTYPE);
+	
+      } else if(parm == PARM_VALUE) {
+        if(substate_value.type == value::TYPE_NUM) {
+	  if(state == ARRAY) {	    
+	    value.valid = true;
+	    value.type = VALUE_TYPE_NUM_ARRAY;
+	    if(value.length < sizeof(value.v_a))
+	      value.v_a[value.length++] = substate_value.value.num;
+	  } else {
+	    value.valid = true;
+	    value.type = VALUE_TYPE_NUM;
+	    value.v = substate_value.value.num;
+	  }
         } else if(substate_value.type == value::TYPE_BOOL) {
-	        value.valid = true;
-                value.type = VALUE_TYPE_BOOL;
-                value.b = substate_value.value.bin;
-	      } else {
+	  value.valid = true;
+	  value.type = VALUE_TYPE_BOOL;
+	  value.b = substate_value.value.bin;
+	} else {
           value.type = VALUE_TYPE_UNKNOWN;
-	        reply_error(ERR_WRONG_VTYPE);
-	      }
+	  reply_error(ERR_WRONG_VTYPE);
+	}
       }
     }
   }
@@ -330,7 +365,7 @@ uint8_t JsonParser::getFtdMode(mode_e mode, const struct mode_map_S *m) {
   for(char i=0;m[i].mode != MODE_NONE;i++)
     if(m[i].mode == mode)
       return m[i].ftd_mode;
-
+  
   return 255;
 }
 
@@ -405,7 +440,7 @@ void JsonParser::cmd_complete(void) {
     if(req == REQ_VER) {
 #ifdef ARDUINO
       // currently only one master is supported
-      Serial.print("{ \"version\": \"0.9.1\" }");
+      Serial.print("{ \"version\": \"0.9.2\" }");
       Serial.flush();
 #else
       printf("Version request\n");
@@ -416,37 +451,68 @@ void JsonParser::cmd_complete(void) {
     
   case CMD_SET:
     switch(port.type) {
-
-      case port::PORT_LED:
-        if(value.valid) {
-	        // a truth value translates into 0 and 1
-	        if(value.type == VALUE_TYPE_BOOL)
-	          value.v = value.b?1:0;
-	  
+    case port::PORT_I2C:
+      // we need an address and a register number
+      if(addr_reg.valid == 3) {      
+	// value can either be a single value or an array of values
+	if(value.valid && (value.type == VALUE_TYPE_NUM || value.type == VALUE_TYPE_NUM_ARRAY)) {
 #ifdef ARDUINO
-          digitalWrite(LED_BUILTIN, value.v?HIGH:LOW);
+	  Wire.beginTransmission(addr_reg.addr); // send address
+	  Wire.write(addr_reg.reg);              // send register
+	  if(value.type == VALUE_TYPE_NUM)
+	    Wire.write(value.v);                 // send single data byte
+	  else
+	    for(uint8_t i=0;i<value.length;i++)
+	      Wire.write(value.v_a[i]);          // sends one data byte from array
+	    
+	  Wire.endTransmission();                // end transmission
 #else
-      	  printf("LED: %s\n", value.v?"on":"off");
-#endif
-      	}
-        break;
-    
-      case port::PORT_C:
-#ifdef ARDUINO
-	ftduino.counter_clear(Ftduino::C1+port.index);
-#else
-	printf("setting counter port\n");
-#endif
-	break;
+	  printf("I2C send(%d, %d): ", addr_reg.addr, addr_reg.reg);
+	  if(value.type == VALUE_TYPE_NUM)
+	    printf("%d\n", value.v);
+	  else {
+	    for(uint8_t i=0;i<value.length;i++)
+	      printf("%d ", value.v_a[i]);
+	    printf("\n");
+	  }
+#endif      
+	} else
+	  reply_error(ERR_INC_I2C);
+      } else
+	reply_error(ERR_INC_I2C);
+      
+      break;
+      
+    case port::PORT_LED:
+      if(value.valid) {
+	// a truth value translates into 0 and 1
+	if(value.type == VALUE_TYPE_BOOL)
+	  value.v = value.b?1:0;
 	
+#ifdef ARDUINO
+	digitalWrite(LED_BUILTIN, value.v?HIGH:LOW);
+#else
+	printf("LED: %s\n", value.v?"on":"off");
+#endif
+      }
+      break;
+      
+    case port::PORT_C:
+#ifdef ARDUINO
+      ftduino.counter_clear(Ftduino::C1+port.index);
+#else
+      printf("setting counter port\n");
+#endif
+      break;
+      
       // act according to output set commands
     case port::PORT_O:
       if(mode != MODE_NONE) {
       	uint8_t ftdm = getFtdMode(mode, o_mode_map);
-	      if(ftdm != 255) {
+	if(ftdm != 255) {
 #ifdef ARDUINO
           output_mode[port.index] = ftdm;
-
+	  
 	  // this invalidates the motor mode of the combined port
 	  motor_mode[port.index>>1] = Ftduino::OFF;
 	  
@@ -458,46 +524,46 @@ void JsonParser::cmd_complete(void) {
 #else
           printf("set O%d mode %d\n", port.index, ftdm);
 #endif
-	      } else
-	        reply_error(ERR_INV_MODE);
+	} else
+	  reply_error(ERR_INV_MODE);
       }
-	
+      
       if(value.valid) {
 #ifdef ARDUINO
-	      if(value.type == VALUE_TYPE_BOOL)
-	        value.v = value.b?Ftduino::MAX:0;
-         
-	      ftduino.output_set(Ftduino::O1+port.index, output_mode[port.index], value.v);
+	if(value.type == VALUE_TYPE_BOOL)
+	  value.v = value.b?Ftduino::MAX:0;
+	
+	ftduino.output_set(Ftduino::O1+port.index, output_mode[port.index], value.v);
 #else
-	      printf("set O%d = %d\n", port.index, value.v);
+	printf("set O%d = %d\n", port.index, value.v);
 #endif
       }
       break;
-
+      
       // act according to input set commands
     case port::PORT_I:
       if(mode != MODE_NONE) {
       	uint8_t ftdm = getFtdMode(mode, i_mode_map);
-	      if(ftdm != 255) {
+	if(ftdm != 255) {
 #ifdef ARDUINO
-		input_mode[port.index] = ftdm;
-		ftduino.input_set_mode(Ftduino::I1+port.index, ftdm);
+	  input_mode[port.index] = ftdm;
+	  ftduino.input_set_mode(Ftduino::I1+port.index, ftdm);
 #else
-	        printf("set I%d mode %d\n", port.index, ftdm);
+	  printf("set I%d mode %d\n", port.index, ftdm);
 #endif
-	      } else
-	        reply_error(ERR_INV_MODE);
+	} else
+	  reply_error(ERR_INV_MODE);
       }
       break;
-		
+      
       // act according to output set commands
     case port::PORT_M:
       if(mode != MODE_NONE) {
       	uint8_t ftdm = getFtdMode(mode, m_mode_map);
-	      if(ftdm != 255) {
+	if(ftdm != 255) {
 #ifdef ARDUINO
           motor_mode[port.index] = ftdm;
-
+	  
 	  // this invalidates the output mode of the related ports
 	  output_mode[2*port.index+0] = Ftduino::OFF;
 	  output_mode[2*port.index+1] = Ftduino::OFF;
@@ -510,18 +576,18 @@ void JsonParser::cmd_complete(void) {
 #else
           printf("set M%d mode %d\n", port.index, ftdm);
 #endif
-	      } else
-	        reply_error(ERR_INV_MODE);
+	} else
+	  reply_error(ERR_INV_MODE);
       }
-	
+      
       if(value.valid) {
 #ifdef ARDUINO
-	      if(value.type == VALUE_TYPE_BOOL)
-	        value.v = value.b?Ftduino::MAX:0;
-         
-	      ftduino.motor_set(Ftduino::M1+port.index, motor_mode[port.index], value.v);
+	if(value.type == VALUE_TYPE_BOOL)
+	  value.v = value.b?Ftduino::MAX:0;
+	
+	ftduino.motor_set(Ftduino::M1+port.index, motor_mode[port.index], value.v);
 #else
-	      printf("set M%d = %d\n", port.index, value.v);
+	printf("set M%d = %d\n", port.index, value.v);
 #endif
       }
       break;
@@ -607,8 +673,8 @@ int JsonParser::parse(char c) {
       else                        substate_value.type = value::TYPE_BOOL;
       
       // value parsing has ended, call processing
-      if(state == NAME)  check_name();
-      if(state == VALUE) check_value();
+      if(state == NAME)                    check_name();
+      if(state == VALUE || state == ARRAY) check_value();
       
       // end of string: main state advances
       switch(state) {

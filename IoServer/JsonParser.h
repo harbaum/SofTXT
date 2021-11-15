@@ -29,7 +29,7 @@ class JsonParser
     enum { NONE, ENDSTR, ENDNUM, ENDBOOL, STRING, NUM, BOOL } substate;
     struct value {
       enum { TYPE_STR, TYPE_NUM, TYPE_BOOL } type;
-      union { char str[8]; uint16_t num; char bin; } value;
+      union { char str[16]; uint16_t num; char bin; } value;
     } substate_value; 
     uint8_t depth; 
 
@@ -41,7 +41,7 @@ class JsonParser
 	   MODE_LEFT, MODE_RIGHT, MODE_BRAKE,  // M1-M4 motor modes
     } mode;
     enum { PARM_NONE,
-	   PARM_PORT, PARM_VALUE, PARM_MODE, PARM_TYPE,
+	   PARM_PORT, PARM_VALUE, PARM_MODE, PARM_TYPE, PARM_ADDR, PARM_REG
     } parm;
     enum { REQ_NONE,
 	   REQ_DEVS, REQ_VER
@@ -49,16 +49,23 @@ class JsonParser
     enum { TYPE_NONE, TYPE_STATE, TYPE_COUNTER,
     } type;
     struct port {
-      enum { PORT_NONE, PORT_I, PORT_C, PORT_O, PORT_M, PORT_LED } type:3;
+      enum { PORT_NONE, PORT_I, PORT_C, PORT_O, PORT_M, PORT_LED, PORT_I2C } type:3;
       uint8_t index:5;
     } port;
-    enum value_type_e { VALUE_TYPE_UNKNOWN, VALUE_TYPE_NUM, VALUE_TYPE_BOOL };
+    struct addr_reg {
+      uint8_t valid;   // bit 0: addr, bit 1:reg
+      uint8_t addr;
+      uint8_t reg;      
+    } addr_reg;
+  enum value_type_e { VALUE_TYPE_UNKNOWN, VALUE_TYPE_NUM, VALUE_TYPE_BOOL, VALUE_TYPE_NUM_ARRAY };
     struct {
       bool valid;
+      uint8_t length;
       value_type_e type;
       union {
 	char b;
 	uint16_t v;
+	uint8_t v_a[32];
       };
     } value;
 
