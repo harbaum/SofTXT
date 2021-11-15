@@ -474,8 +474,8 @@ void JsonParser::cmd_complete(void) {
 	    for(uint8_t i=0;i<value.length;i++)
 	      printf("%d ", value.v_a[i]);
 	    printf("\n");
-	  }
 #endif      
+	  }
 	} else
 	  reply_error(ERR_INC_I2C);
       } else
