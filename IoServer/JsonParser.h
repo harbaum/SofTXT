@@ -12,7 +12,7 @@ class JsonParser
       
  private:
     void reply_error(char id);
-    void reply_value(char *port, bool b, uint16_t v);
+    void reply_value(char *port, bool b, uint16_t v, uint8_t *data, uint8_t data_len);
 
     bool isWhite(char c);
     bool isDigit(char c);
@@ -41,7 +41,7 @@ class JsonParser
 	   MODE_LEFT, MODE_RIGHT, MODE_BRAKE,  // M1-M4 motor modes
     } mode;
     enum { PARM_NONE,
-	   PARM_PORT, PARM_VALUE, PARM_MODE, PARM_TYPE, PARM_ADDR, PARM_REG
+	   PARM_PORT, PARM_VALUE, PARM_MODE, PARM_TYPE, PARM_ADDR, PARM_REG, PARM_LEN
     } parm;
     enum { REQ_NONE,
 	   REQ_DEVS, REQ_VER
@@ -53,9 +53,10 @@ class JsonParser
       uint8_t index:5;
     } port;
     struct addr_reg {
-      uint8_t valid;   // bit 0: addr, bit 1:reg
+      uint8_t valid;   // bit 0: addr, bit 1:reg, bit 2: length
       uint8_t addr;
       uint8_t reg;      
+      uint8_t len;      
     } addr_reg;
   enum value_type_e { VALUE_TYPE_UNKNOWN, VALUE_TYPE_NUM, VALUE_TYPE_BOOL, VALUE_TYPE_NUM_ARRAY };
     struct {

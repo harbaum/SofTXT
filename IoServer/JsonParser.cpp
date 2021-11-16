@@ -42,9 +42,7 @@ extern WebUSB WebUSBSerial;
 #define ERR_INT         16  // internal error
 #define ERR_ILL_REQ     17  // illegal get request
 #define ERR_ILL_TYPE    18  // illegal (counter) type specification
-#define ERR_WRONG_ATYPE 19  // wrong address type
-#define ERR_WRONG_RTYPE 20  // wrong register type
-#define ERR_INC_I2C     21  // incomplete i2c request
+#define ERR_INC_I2C     19  // incomplete i2c request
 
 void JsonParser::reply_error(char id) {
 #ifdef ARDUINO
@@ -59,7 +57,7 @@ void JsonParser::reply_error(char id) {
 }
 
 #ifdef ARDUINO
-void JsonParser::reply_value(char *port, bool b, uint16_t v) {
+void JsonParser::reply_value(char *port, bool b, uint16_t v, uint8_t *data, uint8_t data_len) {
   Serial.print("{ \"port\": \"");
   Serial.print(port);
   Serial.print("\", \"value\": ");
@@ -71,6 +69,15 @@ void JsonParser::reply_value(char *port, bool b, uint16_t v) {
     Serial.print(v, DEC);
     Serial.print("\"");
   }
+  if(data && data_len > 0) {
+    Serial.print("\", \"data\": [ ");
+    for(uint8_t i=0;i<data_len;i++) {
+      Serial.print(data[i], DEC);
+      if(i != data_len)
+      	Serial.print(", ");
+    }
+    Serial.print("] ");
+  }  
   Serial.print("}");
   Serial.flush();
 }
@@ -165,6 +172,8 @@ void JsonParser::check_name(void) {
       parm = PARM_ADDR;
     else if(strcmp(substate_value.value.str, "reg") == 0)
       parm = PARM_REG;
+    else if(strcmp(substate_value.value.str, "len") == 0)
+      parm = PARM_LEN;
     else
       reply_error(ERR_UNK_PARM);   
   }
@@ -205,11 +214,11 @@ void JsonParser::check_value(void) {
 	  else if((substate_value.value.str[0] == 'c') &&
 		  (port.index >= 0) && (port.index <= 3)) 
 	    port.type = port::PORT_C;
-	  else if(strcmp(substate_value.value.str, "i2c") == 0)
-	    port.type = port::PORT_I2C;
 	  else
 	    reply_error(ERR_ILL_PORT);
-	} else
+	} else if(strcmp(substate_value.value.str, "i2c") == 0)
+	  port.type = port::PORT_I2C;
+	else
 	  reply_error(ERR_WRONG_VTYPE);
       } else
 	reply_error(ERR_WRONG_VTYPE);     
@@ -229,7 +238,33 @@ void JsonParser::check_value(void) {
       	reply_error(ERR_WRONG_VTYPE);
     }
   }
-  
+
+  if((cmd == CMD_SET) || (cmd == CMD_GET)) {
+    if(depth == 1) {
+      if(parm == PARM_ADDR) {
+	if(substate_value.type == value::TYPE_NUM) {
+	  addr_reg.valid |= 1;
+	  addr_reg.addr = substate_value.value.num;
+	} else
+	  reply_error(ERR_WRONG_VTYPE);
+	
+      } else if(parm == PARM_REG) {
+	if(substate_value.type == value::TYPE_NUM) {
+	  addr_reg.valid |= 2;
+	  addr_reg.reg = substate_value.value.num;
+	} else
+	  reply_error(ERR_WRONG_VTYPE);
+
+      } else if(parm == PARM_LEN) {
+	if(substate_value.type == value::TYPE_NUM) {
+	  addr_reg.valid |= 4;
+	  addr_reg.len = substate_value.value.num;
+	} else
+	  reply_error(ERR_WRONG_VTYPE);
+      }
+    }
+  }
+      
   if(cmd == CMD_SET) {
     // parse with respect to the parameter name
     // all set parameters are within sub-objects at depth 1
@@ -293,20 +328,6 @@ void JsonParser::check_value(void) {
 	    reply_error(ERR_ILL_MODE);
       	} else
 	  reply_error(ERR_WRONG_VTYPE);
-	
-      } else if(parm == PARM_ADDR) {
-        if(substate_value.type == value::TYPE_NUM) {
-	  addr_reg.valid |= 1;
-	  addr_reg.addr = substate_value.value.num;
-      	} else
-	  reply_error(ERR_WRONG_ATYPE);
-	
-      } else if(parm == PARM_REG) {
-        if(substate_value.type == value::TYPE_NUM) {
-	  addr_reg.valid |= 2;
-	  addr_reg.reg = substate_value.value.num;
-      	} else
-	  reply_error(ERR_WRONG_RTYPE);
 	
       } else if(parm == PARM_VALUE) {
         if(substate_value.type == value::TYPE_NUM) {
@@ -396,7 +417,7 @@ void JsonParser::cmd_complete(void) {
 #ifdef ARDUINO
       uint16_t v = ftduino.input_get(Ftduino::I1 + port.index);
       char port_name[3] = { 'I', (char)('1' + port.index), 0 };
-      reply_value(port_name, input_mode[port.index] == Ftduino::SWITCH, v);
+      reply_value(port_name, input_mode[port.index] == Ftduino::SWITCH, v, NULL, 0);
 #else
       printf("get input port %d\n", port.index);
 #endif      
@@ -407,7 +428,7 @@ void JsonParser::cmd_complete(void) {
 #ifdef ARDUINO
 	uint16_t v = ftduino.counter_get_state(Ftduino::C1 + port.index);
 	char port_name[3] = { 'C', (char)('1' + port.index), 0 };
-	reply_value(port_name, true, v);
+	reply_value(port_name, true, v, NULL, 0);
 #else
       printf("get counter state %d\n", port.index);
 #endif
@@ -415,13 +436,42 @@ void JsonParser::cmd_complete(void) {
 #ifdef ARDUINO
 	uint16_t v = ftduino.counter_get(Ftduino::C1 + port.index);
 	char port_name[3] = { 'C', (char)('1' + port.index), 0 };
-	reply_value(port_name, false, v);
+	reply_value(port_name, false, v, NULL, 0);
 #else
 	printf("get counter value %d\n", port.index);
 #endif
       }
     }
 
+    if(port.type == port::PORT_I2C) {
+      if((addr_reg.valid & 5) == 5) {
+#ifdef ARDUINO
+	uint8_t buf[addr_reg.len];
+	
+	// check if register is present
+	if(addr_reg.valid & 2) {
+	  Wire.beginTransmission(addr_reg.addr);
+	  Wire.write(addr_reg.reg);
+	  Wire.endTransmission( false );
+	}
+	
+	Wire.requestFrom(addr_reg.addr, addr_reg.len);
+	for(uint8_t i=0;i<addr_reg.len && Wire.available();i++)	
+	  buf[i] = Wire.read();
+	uint8_t error = Wire.endTransmission();
+	if(error != 0)	  
+	  reply_value("i2c", false, error, NULL, 0);
+	else
+	  reply_value("i2c", false, error, buf, addr_reg.len);
+#else
+	printf("I2C recv(%d, ", addr_reg.addr);
+	if(addr_reg.valid & 2) printf("%d, ", addr_reg.reg);
+	printf("%d)\n", addr_reg.len);
+#endif
+      } else
+	reply_error(ERR_INC_I2C);
+    }
+      
     if(req == REQ_DEVS) {
 #ifdef ARDUINO
       // currently only one master is supported
@@ -453,29 +503,35 @@ void JsonParser::cmd_complete(void) {
     switch(port.type) {
     case port::PORT_I2C:
       // we need an address and a register number
-      if(addr_reg.valid == 3) {      
+      if(addr_reg.valid & 1) {      
 	// value can either be a single value or an array of values
 	if(value.valid && (value.type == VALUE_TYPE_NUM || value.type == VALUE_TYPE_NUM_ARRAY)) {
 #ifdef ARDUINO
 	  Wire.beginTransmission(addr_reg.addr); // send address
-	  Wire.write(addr_reg.reg);              // send register
+	  if(addr_reg.valid & 2)
+	    Wire.write(addr_reg.reg);            // send register
 	  if(value.type == VALUE_TYPE_NUM)
 	    Wire.write(value.v);                 // send single data byte
 	  else
 	    for(uint8_t i=0;i<value.length;i++)
 	      Wire.write(value.v_a[i]);          // sends one data byte from array
 	    
-	  Wire.endTransmission();                // end transmission
+	  uint8_t error = Wire.endTransmission();                // end transmission
+	  // send result
+	  reply_value("i2c", false, error, NULL, 0);
 #else
-	  printf("I2C send(%d, %d): ", addr_reg.addr, addr_reg.reg);
-	  if(value.type == VALUE_TYPE_NUM)
-	    printf("%d\n", value.v);
-	  else {
-	    for(uint8_t i=0;i<value.length;i++)
-	      printf("%d ", value.v_a[i]);
-	    printf("\n");
-#endif      
-	  }
+          printf("I2C send(%d", addr_reg.addr);
+	  if(addr_reg.valid & 2)
+	    printf(" %d", addr_reg.reg);
+	  printf("): ");
+          if(value.type == VALUE_TYPE_NUM)
+            printf("%d\n", value.v);
+          else {
+            for(uint8_t i=0;i<value.length;i++)
+              printf("%d ", value.v_a[i]);
+            printf("\n");
+          }	  
+#endif
 	} else
 	  reply_error(ERR_INC_I2C);
       } else
